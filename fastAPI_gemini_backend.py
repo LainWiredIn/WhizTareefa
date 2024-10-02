@@ -3,7 +3,7 @@ from google.api_core.exceptions import ResourceExhausted
 from sentence_transformers import SentenceTransformer
 from annoy import AnnoyIndex
 import PyPDF2
-
+import os
 from serpapi import GoogleSearch
 
 import requests
@@ -16,7 +16,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
 
+import base64
+from playsound import playsound
+
 app = FastAPI()
+
+os.makedirs("static/audios", exist_ok=True)
 
 # mounting static files (for future CSS, JS, files)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -31,13 +36,14 @@ import requests
 
 def text_to_speech(text):
     url = "https://api.sarvam.ai/text-to-speech"
-    
+    if len(text)>450:
+        text = text[:450]
     payload = {
         "inputs": [text],
         "target_language_code": "en-IN",
         "speaker": "meera",
         "pitch": 0,
-        "pace": 1.65,
+        "pace": 1.2,
         "loudness": 1.5,
         "speech_sample_rate": 8000,
         "enable_preprocessing": True,
@@ -51,11 +57,25 @@ def text_to_speech(text):
 
     response = requests.request("POST", url, json=payload, headers=headers)
 
-    print(response.text)
+    if response.status_code == 200:
+        audio_data = response.json().get('audios', [])[0]
+        if audio_data:
 
+            audio_bytes = base64.b64decode(audio_data)
+            audio_file_path = f"static/audios/output.wav"
 
+            with open(audio_file_path, "wb") as audio_file:
+                audio_file.write(audio_bytes)
+            
+            print("Audio saved as output.wav")
+            return audio_file_path
+        else:
+            print("No audio data returned.")
+            return None
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+        return None
 
-# 1. Parse PDF and extract text
 def extract_text_from_pdf(pdf_path):
     text = ""
     with open(pdf_path, 'rb') as file:
@@ -285,12 +305,18 @@ async def ask(query_model: QueryModel):
             response_without_rag = generate_response(model, query_model.query)
             audio_url = text_to_speech(response_without_rag)
             print("SARVAM COOKED:", audio_url)
-            return {"response": response_without_rag, "audio_url": audio_url}
+            if audio_url:
+                return {"response": response_without_rag, "audio_url": f"/static/audios/{os.path.basename(audio_url)}"}
+            else:
+                return {"response": response_without_rag, "audio_url": None}
     else:
         greeting = first_response.replace("[GREETING]", "").strip()
         audio_url = text_to_speech(greeting)
         print("SARVAM COOKED:", audio_url)
-        return {"response": greeting, "audio_url": audio_url}
+        if audio_url:
+            return {"response": greeting, "audio_url": f"/static/audios/{os.path.basename(audio_url)}"}
+        else:
+            return {"response": greeting, "audio_url": None}
 
 @app.post("/search-web/")
 async def search_web_endpoint(query_model: QueryModel):
@@ -306,8 +332,10 @@ async def search_web_endpoint(query_model: QueryModel):
     model = configure_genai("AIzaSyAwuW7ZvbYb7ygDqxWGDLjUSgfq8hbZ1x0")
     final_response = generate_response(model, final_prompt)
     audio_url = text_to_speech(final_response)
-    print("SARVAM COOKED:", audio_url)
-    return {"response": final_response, "audio_url": audio_url}
+    if audio_url:
+        return {"response": final_response, "audio_url": f"/static/audios/{os.path.basename(audio_url)}"}
+    else:
+        return {"response": final_response, "audio_url": None}
 
 if __name__ == "__main__":
     import uvicorn
