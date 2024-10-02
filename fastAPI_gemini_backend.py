@@ -21,6 +21,7 @@ from playsound import playsound
 
 app = FastAPI()
 
+# for storing sarvam generated audio files
 os.makedirs("static/audios", exist_ok=True)
 
 # mounting static files (for future CSS, JS, files)
@@ -52,7 +53,7 @@ def text_to_speech(text):
 
     headers = {
         "Content-Type": "application/json",
-        "API-Subscription-Key": "b6f6afd0-ed46-46fd-a6fb-49b46c6fc1c4"
+        "API-Subscription-Key": "<SARVAM API KEY>"
     }
 
     response = requests.request("POST", url, json=payload, headers=headers)
@@ -88,7 +89,7 @@ def chunk_text(text, chunk_size=100):
     words = text.split()
     return [' '.join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
 
-def create_annoy_index(chunks, embedder, n_trees=10):
+def create_annoy_index(chunks, embedder, n_trees=15):
     dim = embedder.get_sentence_embedding_dimension()
     
     annoy_index = AnnoyIndex(dim, 'angular')
@@ -100,12 +101,12 @@ def create_annoy_index(chunks, embedder, n_trees=10):
         chunk_embeddings.append(embedding)
         annoy_index.add_item(i, embedding)
     
-    annoy_index.build(n_trees)  # Higher n_trees gives better accuracy, but slower queries
+    annoy_index.build(n_trees)  # more n_trees gives better accuracy, but slower queries
     return annoy_index, chunk_embeddings
 
 def retrieve_relevant_chunks(query, annoy_index, chunks, top_k=5):
-    query_embedding = embedder.encode([query])[0]  # Get the query embedding
-    nearest_indices = annoy_index.get_nns_by_vector(query_embedding, top_k)  # Find nearest neighbors
+    query_embedding = embedder.encode([query])[0] 
+    nearest_indices = annoy_index.get_nns_by_vector(query_embedding, top_k)  # find nearest neighbors
     
     return [chunks[i] for i in nearest_indices]
 
@@ -118,10 +119,10 @@ def configure_genai(api_key):
         {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
     ]
     generation_config = {
-        "temperature": 0.7,  # Adjusted for more engaging conversation
+        "temperature": 0.7,  # for more engaging conversation
         "top_p": 1,
         "top_k": 1,
-        "max_output_tokens": 512  # Shorter responses for ongoing chat
+        "max_output_tokens": 512  # shorter responses for ongoing chat
     }
     model = genai.GenerativeModel(
         model_name="gemini-pro",
@@ -130,9 +131,8 @@ def configure_genai(api_key):
     )
     return model
 
-model = configure_genai("AIzaSyBxzuL9gFINm3GtnA0SlqWwwtB1ZPVMJY0")
+model = configure_genai("<GEMINI-API-KEY>")
 
-# 6. Define the RAG template
 template = """
 You are a well-regarded and intelligent teacher, who likes to not tell the students the answers directly but likes them to do some work. The student has asked the following question:
 
@@ -159,12 +159,11 @@ def generate_response(model, prompt):
         print(f"Error occurred: {e}")
         return "I'm sorry, I encountered an error."
 
-# 7. RAG System: Generate responses based on query and retrieved chunks
+# function generates responses based on query and retrieved chunks
 def generate_rag_response(query):
-    # Retrieve relevant chunks
+    # retrieve relevant chunks
     relevant_chunks = retrieve_relevant_chunks(query, annoy_index, chunks)
     
-    # Format the template with the query and retrieved chunks
     prompt = template.format(query, "\n\n".join(relevant_chunks))
     # print("these are the chunks I found: ", relevant_chunks)
     try:
@@ -183,14 +182,14 @@ def search_web(query):
         "q": query,
         "hl": "en",
         "gl": "us",
-        "api_key": "e815a79bab92dd5b328dfa8eadf0bc145d38377068926c587276be27e584b4e7"  # Insert your SerpAPI key here
+        "api_key": "<SerpAPI KEY>"
     }
     
     search = GoogleSearch(params)
     results = search.get_dict()
     organic_results = results.get("organic_results", [])
-    x = 5
-    return organic_results[:x]  # limit to top x results for brevity and for not depleting the free web search API
+    x = 5 # limit to top x results for brevity and for not depleting the free web search API
+    return organic_results[:x]  
 
 def extract_full_content_from_url(url):
     try:
@@ -223,6 +222,7 @@ def retrieve_full_web_content_and_links(query):
 
 # queries = ["What did fantano think of the latest Voidz album, Like all before you? How does it compare to his view of their last record, Virtue?"]
 
+# for making the bot an intelligent conversationalist
 template_0 = """
 You are an intelligent teacher who students can freely talk to and ask things about. The student said the following to you:
 
@@ -234,10 +234,13 @@ If the utterance is a question that needs to be answered, output [QUESTION]. Do 
 
 """
 
+# for web search enhanced results
 template_2 = """
 You are an intelligent teacher, who likes to go beyond the textbook when teaching your students. Here is the question the student has asked:
 
 {}
+
+Web Results:
 
 {}
 
@@ -246,6 +249,7 @@ Referencing all the original articles, succintly answer the student's query usin
 Please only answer in sentences and paragraphs. There should be no bullet points. Write as if you were speaking in a continuous manner.
 """
 
+# for rephrasing the user's query
 template_3 = """
 You are the best google searcher in the world. You have expertise in phrasing queries to Google Search so that it outputs the best possible search results. Your friend wants your help. He is looking for the most relevant search results for the following query: {}
 
@@ -256,11 +260,9 @@ ONLY OUTPUT THE QUERY.
 
 def refine_query(query):
     refined_prompt = template_3.format(query)
-    model = configure_genai("AIzaSyAKo6gfAKiKQ46c7NSnGQ-FUXloscyZ_wY")
+    # model = configure_genai("<API-KEY>")
     refined_response = generate_response(model, refined_prompt)
     return refined_response
-
-##################################################################################
 
 from pydantic import BaseModel
 
@@ -287,7 +289,6 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 @app.post("/ask/")
 async def ask(query_model: QueryModel):
-    # Extract text and create annoy index
     first_prompt = template_0.format(query_model.query)
     first_response = generate_response(model, first_prompt)
     if "[QUESTION]" in first_response:
@@ -329,7 +330,7 @@ async def search_web_endpoint(query_model: QueryModel):
 
     extended_prompt = f"Here is more context and information from the web:\n\n{web_content}"
     final_prompt = template_2.format(query_model.query, extended_prompt)
-    model = configure_genai("AIzaSyAwuW7ZvbYb7ygDqxWGDLjUSgfq8hbZ1x0")
+    # model = configure_genai("<API KEY>")
     final_response = generate_response(model, final_prompt)
     audio_url = text_to_speech(final_response)
     if audio_url:
@@ -364,6 +365,6 @@ if __name__ == "__main__":
 #         # print(extended_prompt)
 #         # THIS SEEMS TO BE WORKING
 #         final_prompt = template_2.format(query, extended_prompt)
-#         model = configure_genai("AIzaSyAwuW7ZvbYb7ygDqxWGDLjUSgfq8hbZ1x0")
+#         model = configure_genai("<API-KEY>")
 #         final_response = generate_response(model, final_prompt)
 #         print(f"Wanna know what I found on the web? {final_response}")
