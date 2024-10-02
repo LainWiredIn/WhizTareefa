@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoomBox</title>
+    <link rel="stylesheet" href="">
+</head>
+<body>
+    <h1>BoomBox</h1>
+    <form id="upload-form">
+        <input type="file" name="file" accept=".pdf" required>
+        <button type="submit">Upload PDF</button>
+    </form>
+
+    <div>
+        <h2>Ask a question:</h2>
+        <input type="text" id="query" placeholder="Type your question here...">
+        <button id="ask-button">Ask</button>
+        <button id="search-button">Search the web</button>
+    </div>
+    <audio id="audioPlayer" controls style="display: none;"></audio>
+    <h3>Response:</h3>
+    <p id="response"></p>
+    
+
+    <script>
+        document.getElementById("upload-form").onsubmit = async function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            const response = await fetch("/upload-pdf/", {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json();
+            alert(result.message);
+        };
+
+        document.getElementById("ask-button").onclick = async function() {
+            const query = document.getElementById("query").value;
+            const response = await fetch("/ask/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ query })
+            });
+            const result = await response.json();
+            document.getElementById("response").innerText = result.response;
+
+            // Set up audio playback if available
+            const audioPlayer = document.getElementById('audioPlayer');
+            if (result.audio_url) {
+                audioPlayer.src = result.audio_url;
+                audioPlayer.style.display = 'block'; // Show the audio player
+                audioPlayer.play(); // Play the audio automatically
+            } else {
+                audioPlayer.style.display = 'none'; // Hide the audio player if no audio
+            }
+        };
+
+        document.getElementById("search-button").onclick = async function() {
+            const query = document.getElementById("query").value;
+            const response = await fetch("/search-web/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ query })
+            });
+            const result = await response.json();
+            document.getElementById("response").innerText = result.response;
+
+            // Set up audio playback if available
+            const audioPlayer = document.getElementById('audioPlayer');
+            if (result.audio_url) {
+                audioPlayer.src = result.audio_url;
+                audioPlayer.style.display = 'block'; // Show the audio player
+                audioPlayer.play(); // Play the audio automatically
+            } else {
+                audioPlayer.style.display = 'none'; // Hide the audio player if no audio
+            }
+        };
+
+        
+    </script>
+</body>
+</html>
