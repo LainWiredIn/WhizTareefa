@@ -46,6 +46,7 @@ WhizTareefa is your personal knowledge assistant, designed to handle complex que
 ```
 pip install fastapi uvicorn PyPDF2 annoy sentence-transformers playsound google-generativeai serpapi requests bs4
 ```
+- An error you mite see during the installation of playsound is probably related to Python 3.13, which is currently in development and not yet fully supported by many Python packages (including playsound). Use Python 3.10 or 3.11 instead of 3.13 for your virtual environment.
 2. Running the Application
 - First clone the repository:
 ```
